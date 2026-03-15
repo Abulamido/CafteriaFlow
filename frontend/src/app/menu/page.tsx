@@ -14,7 +14,7 @@ export default function MenuEditor() {
         if (!tenantId) return;
         setLoading(true);
         try {
-            const res = await fetch(`http://localhost:8000/api/tenants/${tenantId}/menu`);
+            const res = await fetch(`/api/tenants/${tenantId}/menu`);
             if (res.ok) {
                 setItems(await res.json());
                 setIsLoaded(true);
@@ -31,7 +31,7 @@ export default function MenuEditor() {
         if (!tenantId) return alert('Enter Tenant ID first');
 
         try {
-            const res = await fetch(`http://localhost:8000/api/tenants/${tenantId}/menu`, {
+            const res = await fetch(`/api/tenants/${tenantId}/menu`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ item_name: newItemName, price: parseFloat(newItemPrice) })

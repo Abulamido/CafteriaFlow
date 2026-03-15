@@ -11,7 +11,7 @@ export default function OrdersDashboard() {
         if (!tenantId) return;
         setLoading(true);
         try {
-            const res = await fetch(`http://localhost:8000/api/tenants/${tenantId}/orders`);
+            const res = await fetch(`/api/tenants/${tenantId}/orders`);
             if (res.ok) {
                 setOrders(await res.json());
                 setIsLoaded(true);

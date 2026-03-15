@@ -11,7 +11,7 @@ export default function Onboarding() {
         e.preventDefault();
         setLoading(true);
         try {
-            const res = await fetch('http://localhost:8000/api/tenants', {
+            const res = await fetch('/api/tenants', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -37,7 +37,7 @@ export default function Onboarding() {
     const fetchQrCode = async (id: string) => {
         try {
             setTimeout(async () => {
-                const res = await fetch(`http://localhost:8000/api/tenants/${id}/qr`);
+                const res = await fetch(`/api/tenants/${id}/qr`);
                 if (res.ok) {
                     const data = await res.json();
                     setQrCode(data.qr?.base64 || 'mock');
