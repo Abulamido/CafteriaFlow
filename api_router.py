@@ -1,0 +1,82 @@
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from sqlalchemy.orm import Session
+from uuid import UUID
+
+from database import get_db
+from models import Tenant, Menu, Order
+from evolution_client import create_instance, fetch_qr_code
+from schemas import (
+    TenantCreate, TenantResponse,
+    MenuItemCreate, MenuItemResponse,
+    OrderResponse
+)
+
+router = APIRouter()
+
+# --- Tenant Endpoints ---
+
+@router.post("/tenants", response_model=TenantResponse, status_code=status.HTTP_201_CREATED)
+async def create_tenant(tenant: TenantCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    db_tenant = db.query(Tenant).filter(Tenant.instance_name == tenant.instance_name).first()
+    if db_tenant:
+        raise HTTPException(status_code=400, detail="Instance name already registered")
+    
+    new_tenant = Tenant(
+        instance_name=tenant.instance_name,
+        api_key=tenant.api_key,
+        sys_prompt=tenant.sys_prompt
+    )
+    db.add(new_tenant)
+    db.commit()
+    db.refresh(new_tenant)
+    
+    # Trigger Evolution API to create instance in the background
+    background_tasks.add_task(create_instance, new_tenant.instance_name)
+    
+    return new_tenant
+
+@router.get("/tenants/{tenant_id}", response_model=TenantResponse)
+def get_tenant(tenant_id: UUID, db: Session = Depends(get_db)):
+    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    return tenant
+
+@router.get("/tenants/{tenant_id}/qr")
+async def get_tenant_qr(tenant_id: UUID, db: Session = Depends(get_db)):
+    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    qr_data = await fetch_qr_code(tenant.instance_name)
+    return {"instance_name": tenant.instance_name, "qr": qr_data}
+
+# --- Menu Endpoints ---
+
+@router.post("/tenants/{tenant_id}/menu", response_model=MenuItemResponse, status_code=status.HTTP_201_CREATED)
+def create_menu_item(tenant_id: UUID, item: MenuItemCreate, db: Session = Depends(get_db)):
+    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+        
+    new_item = Menu(
+        tenant_id=tenant_id,
+        item_name=item.item_name,
+        price=item.price,
+        json_meta=item.json_meta
+    )
+    db.add(new_item)
+    db.commit()
+    db.refresh(new_item)
+    return new_item
+
+@router.get("/tenants/{tenant_id}/menu", response_model=list[MenuItemResponse])
+def get_menu(tenant_id: UUID, db: Session = Depends(get_db)):
+    items = db.query(Menu).filter(Menu.tenant_id == tenant_id).all()
+    return items
+
+# --- Order Endpoints ---
+
+@router.get("/tenants/{tenant_id}/orders", response_model=list[OrderResponse])
+def get_orders(tenant_id: UUID, db: Session = Depends(get_db)):
+    orders = db.query(Order).filter(Order.tenant_id == tenant_id).order_by(Order.id.desc()).all()
+    return orders
