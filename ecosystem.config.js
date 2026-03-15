@@ -4,6 +4,7 @@ module.exports = {
       name: "cafteriaflow-api",
       script: "./venv/bin/uvicorn",
       args: "main:app --host 0.0.0.0 --port 8000 --workers 4",
+      interpreter: "./venv/bin/python",
       env: {
         DATABASE_URL: "postgresql://cafteria_user:cafteria_password@localhost/cafteriaflow",
         REDIS_URL: "redis://localhost:6379/0",
