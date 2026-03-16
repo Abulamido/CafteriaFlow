@@ -14,8 +14,17 @@ async def create_instance(instance_name: str) -> dict:
                 "qrcode": True,
                 "integration": "WHATSAPP-BAILEYS"
             }
-            headers = {"apikey": EVOLUTION_GLOBAL_API_KEY}
+            # Evolution API v2 requires apikey in header and optionally body
+            headers = {
+                "apikey": EVOLUTION_GLOBAL_API_KEY,
+                "Content-Type": "application/json"
+            }
             response = await client.post(f"{EVOLUTION_API_URL}/instance/create", json=payload, headers=headers)
+            
+            # Print for debugging if it fails
+            if response.status_code >= 400:
+                print(f"Failed to create Evolution instance: {response.text}")
+                
             response.raise_for_status()
             return response.json()
         except Exception as e:
