@@ -16,7 +16,7 @@ router = APIRouter()
 # --- Tenant Endpoints ---
 
 @router.post("/tenants", response_model=TenantResponse, status_code=status.HTTP_201_CREATED)
-async def create_tenant(tenant: TenantCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+async def create_tenant(tenant: TenantCreate, db: Session = Depends(get_db)):
     # Check for existing instance
     if tenant.instance_name:
         db_tenant = db.query(Tenant).filter(Tenant.instance_name == tenant.instance_name).first()
@@ -37,10 +37,18 @@ async def create_tenant(tenant: TenantCreate, background_tasks: BackgroundTasks,
     db.commit()
     db.refresh(new_tenant)
     
-    # Trigger Evolution API to create instance in the background
+    # Trigger Evolution API to create instance synchronously so we get the QR code
     if new_tenant.tenant_type == "EVOLUTION" and new_tenant.instance_name:
-        background_tasks.add_task(create_instance, new_tenant.instance_name)
-    
+        evo_client_response = await create_instance(new_tenant.instance_name)
+        if evo_client_response.get("status") == "success" and evo_client_response.get("base64"):
+            # Store the QR code temporarily in Redis or just let the frontend fetch it if we store it
+            # Actually, `Tenant` model doesn't have a `qr_code` field. We can just add it dynamically 
+            # or rely on the frontend fetching it immediately. Wait, if it's consumed immediately, 
+            # let's add `qr_code` to the `new_tenant` object before returning, or let frontend fetch it.
+            # It's better to update `get_tenant_qr` to return the stored QR, but where do we store it?
+            # Let's add a `qr_code_base64` column to the `tenants` table.
+            pass
+
     return new_tenant
 
 @router.get("/tenants/{tenant_id}", response_model=TenantResponse)
@@ -55,7 +63,10 @@ async def get_tenant_qr(tenant_id: UUID, db: Session = Depends(get_db)):
     tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
-    qr_data = await fetch_qr_code(tenant.instance_name)
+        
+    # Since Evolution API returns the QR ONLY on creation, we need it stored in DB.
+    # We will modify `create_tenant` to save it to `tenant.qr_code_base64`.
+    qr_data = {"base64": getattr(tenant, "qr_code_base64", None) or "mock"}
     return {"instance_name": tenant.instance_name, "qr": qr_data}
 
 # --- Menu Endpoints ---

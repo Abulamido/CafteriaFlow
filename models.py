@@ -13,6 +13,7 @@ class Tenant(Base):
     # Evolution Fields
     instance_name = Column(String, unique=True, index=True, nullable=True)
     api_key = Column(String, nullable=True)
+    qr_code_base64 = Column(String, nullable=True)
     
     # Meta Fields
     phone_number_id = Column(String, unique=True, index=True, nullable=True)
