@@ -15,7 +15,9 @@ export default function Onboarding() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    instance_name: tenantName,
+                    name: tenantName,
+                    tenant_type: 'EVOLUTION',
+                    instance_name: tenantName.toLowerCase().replace(/\s+/g, '_'),
                     api_key: 'vendor_key_' + Math.random().toString(36).slice(2)
                 })
             });

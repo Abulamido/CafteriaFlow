@@ -17,13 +17,20 @@ router = APIRouter()
 
 @router.post("/tenants", response_model=TenantResponse, status_code=status.HTTP_201_CREATED)
 async def create_tenant(tenant: TenantCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    db_tenant = db.query(Tenant).filter(Tenant.instance_name == tenant.instance_name).first()
-    if db_tenant:
-        raise HTTPException(status_code=400, detail="Instance name already registered")
+    # Check for existing instance
+    if tenant.instance_name:
+        db_tenant = db.query(Tenant).filter(Tenant.instance_name == tenant.instance_name).first()
+        if db_tenant:
+            raise HTTPException(status_code=400, detail="Instance name already registered")
     
     new_tenant = Tenant(
+        name=tenant.name,
+        tenant_type=tenant.tenant_type or "EVOLUTION",
         instance_name=tenant.instance_name,
         api_key=tenant.api_key,
+        phone_number_id=tenant.phone_number_id,
+        waba_id=tenant.waba_id,
+        access_token=tenant.access_token,
         sys_prompt=tenant.sys_prompt
     )
     db.add(new_tenant)
@@ -31,7 +38,8 @@ async def create_tenant(tenant: TenantCreate, background_tasks: BackgroundTasks,
     db.refresh(new_tenant)
     
     # Trigger Evolution API to create instance in the background
-    background_tasks.add_task(create_instance, new_tenant.instance_name)
+    if new_tenant.tenant_type == "EVOLUTION" and new_tenant.instance_name:
+        background_tasks.add_task(create_instance, new_tenant.instance_name)
     
     return new_tenant
 
