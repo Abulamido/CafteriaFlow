@@ -16,7 +16,7 @@ router = APIRouter()
 # --- Tenant Endpoints ---
 
 @router.post("/tenants", response_model=TenantResponse, status_code=status.HTTP_201_CREATED)
-async def create_tenant(tenant: TenantCreate, db: Session = Depends(get_db)):
+async def create_tenant(tenant: TenantCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     # Check for existing instance
     if tenant.instance_name:
         db_tenant = db.query(Tenant).filter(Tenant.instance_name == tenant.instance_name).first()
@@ -37,19 +37,26 @@ async def create_tenant(tenant: TenantCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_tenant)
     
-    # Trigger Evolution API to create instance synchronously so we get the QR code
+    # Trigger Evolution API to create instance in the background
     if new_tenant.tenant_type == "EVOLUTION" and new_tenant.instance_name:
-        evo_client_response = await create_instance(new_tenant.instance_name)
-        if evo_client_response.get("status") == "success" and evo_client_response.get("base64"):
-            # Store the QR code temporarily in Redis or just let the frontend fetch it if we store it
-            # Actually, `Tenant` model doesn't have a `qr_code` field. We can just add it dynamically 
-            # or rely on the frontend fetching it immediately. Wait, if it's consumed immediately, 
-            # let's add `qr_code` to the `new_tenant` object before returning, or let frontend fetch it.
-            # It's better to update `get_tenant_qr` to return the stored QR, but where do we store it?
-            # Let's add a `qr_code_base64` column to the `tenants` table.
-            pass
-
+        background_tasks.add_task(create_instance_and_save_qr, new_tenant.id, new_tenant.instance_name)
+    
     return new_tenant
+
+# Background task wrapper to avoid blocking the API
+async def create_instance_and_save_qr(tenant_id, instance_name: str):
+    from database import SessionLocal
+    from models import Tenant
+    evo_client_response = await create_instance(instance_name)
+    if evo_client_response.get("status") == "success" and evo_client_response.get("base64"):
+        db = SessionLocal()
+        try:
+            tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+            if tenant:
+                tenant.qr_code_base64 = evo_client_response["base64"]
+                db.commit()
+        finally:
+            db.close()
 
 @router.get("/tenants/{tenant_id}", response_model=TenantResponse)
 def get_tenant(tenant_id: UUID, db: Session = Depends(get_db)):
