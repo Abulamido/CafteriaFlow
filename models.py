@@ -7,8 +7,18 @@ from database import Base
 class Tenant(Base):
     __tablename__ = "tenants"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    instance_name = Column(String, unique=True, index=True, nullable=False)
-    api_key = Column(String, nullable=False)
+    name = Column(String, nullable=False)
+    tenant_type = Column(String, default="EVOLUTION") # EVOLUTION, META
+    
+    # Evolution Fields
+    instance_name = Column(String, unique=True, index=True, nullable=True)
+    api_key = Column(String, nullable=True)
+    
+    # Meta Fields
+    phone_number_id = Column(String, unique=True, index=True, nullable=True)
+    waba_id = Column(String, nullable=True)
+    access_token = Column(String, nullable=True)
+    
     sys_prompt = Column(String, nullable=True)
 
     menus = relationship("Menu", back_populates="tenant")

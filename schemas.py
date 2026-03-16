@@ -4,17 +4,32 @@ from uuid import UUID
 
 # Tenant Schemas
 class TenantCreate(BaseModel):
-    instance_name: str
-    api_key: str
+    name: str # Friendly name
+    tenant_type: str # "EVOLUTION" or "META"
+    instance_name: Optional[str] = None # For Evolution API
+    api_key: Optional[str] = None # For Evolution API
+    phone_number_id: Optional[str] = None # For Meta API
+    waba_id: Optional[str] = None # For Meta API
+    access_token: Optional[str] = None # For Meta API
     sys_prompt: Optional[str] = None
 
 class TenantResponse(BaseModel):
     id: UUID
-    instance_name: str
+    name: str
+    tenant_type: str
     sys_prompt: Optional[str]
 
     class Config:
         orm_mode = True
+
+# Message Schemas (Unified)
+class NormalizedMessage(BaseModel):
+    tenant_id: UUID
+    customer_phone: str
+    content: str
+    message_type: str = "text" # text, image, list_response
+    raw_payload: Dict[str, Any]
+    metadata: Dict[str, Any] = {}
 
 # Menu Schemas
 class MenuItemCreate(BaseModel):
