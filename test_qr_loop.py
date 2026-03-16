@@ -5,9 +5,9 @@ async def test():
     async with httpx.AsyncClient() as client:
         # Create tenant
         res = await client.post('http://localhost:8000/api/tenants', json={
-            'name': 'qr_final_test',
+            'name': 'qr_final_test_02',
             'tenant_type': 'EVOLUTION',
-            'instance_name': 'qr_final_ok_01',
+            'instance_name': 'qr_final_ok_02',
             'api_key': 'test'
         })
         tenant_data = res.json()

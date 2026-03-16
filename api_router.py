@@ -39,24 +39,13 @@ async def create_tenant(tenant: TenantCreate, background_tasks: BackgroundTasks,
     
     # Trigger Evolution API to create instance in the background
     if new_tenant.tenant_type == "EVOLUTION" and new_tenant.instance_name:
-        background_tasks.add_task(create_instance_and_save_qr, new_tenant.id, new_tenant.instance_name)
+        background_tasks.add_task(create_instance_background, new_tenant.instance_name)
     
     return new_tenant
 
-# Background task wrapper to avoid blocking the API
-async def create_instance_and_save_qr(tenant_id, instance_name: str):
-    from database import SessionLocal
-    from models import Tenant
-    evo_client_response = await create_instance(instance_name)
-    if evo_client_response.get("status") == "success" and evo_client_response.get("base64"):
-        db = SessionLocal()
-        try:
-            tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
-            if tenant:
-                tenant.qr_code_base64 = evo_client_response["base64"]
-                db.commit()
-        finally:
-            db.close()
+# Background task: just create the instance, QR is fetched live by the frontend
+async def create_instance_background(instance_name: str):
+    await create_instance(instance_name)
 
 @router.get("/tenants/{tenant_id}", response_model=TenantResponse)
 def get_tenant(tenant_id: UUID, db: Session = Depends(get_db)):
@@ -67,14 +56,28 @@ def get_tenant(tenant_id: UUID, db: Session = Depends(get_db)):
 
 @router.get("/tenants/{tenant_id}/qr")
 async def get_tenant_qr(tenant_id: UUID, db: Session = Depends(get_db)):
+    """Polls Evolution API connect endpoint to get the live QR code."""
+    import asyncio
     tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
-        
-    # Since Evolution API returns the QR ONLY on creation, we need it stored in DB.
-    # We will modify `create_tenant` to save it to `tenant.qr_code_base64`.
-    qr_data = {"base64": getattr(tenant, "qr_code_base64", None) or "mock"}
-    return {"instance_name": tenant.instance_name, "qr": qr_data}
+    
+    if not tenant.instance_name:
+        return {"instance_name": None, "qr": {"base64": None}, "status": "no_instance"}
+    
+    # Poll the connect endpoint up to 10 times (20 seconds max)
+    for attempt in range(10):
+        qr_data = await fetch_qr_code(tenant.instance_name)
+        # Evolution API returns base64 when QR is ready
+        if isinstance(qr_data, dict) and qr_data.get("base64"):
+            return {"instance_name": tenant.instance_name, "qr": qr_data, "status": "qr_ready"}
+        # If count > 0, QR generation is in progress
+        if isinstance(qr_data, dict) and qr_data.get("count", 0) == 0:
+            await asyncio.sleep(2)
+        else:
+            break
+    
+    return {"instance_name": tenant.instance_name, "qr": qr_data, "status": "pending"}
 
 # --- Menu Endpoints ---
 
