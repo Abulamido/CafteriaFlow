@@ -36,27 +36,33 @@ export default function Onboarding() {
         }
     };
 
-    const fetchQrCode = async (id: string) => {
-        // Poll the backend QR endpoint until we get a real base64 string
-        for (let attempt = 0; attempt < 10; attempt++) {
+    const fetchQrCode = (id: string) => {
+        let attempts = 0;
+        const maxAttempts = 15;
+        
+        const pollInterval = setInterval(async () => {
+            attempts++;
             try {
-                // Wait 3 seconds between attempts to give Evolution API time to generate QR
-                await new Promise(resolve => setTimeout(resolve, 3000));
                 const res = await fetch(`/api/tenants/${id}/qr`);
                 if (res.ok) {
                     const data = await res.json();
                     const base64 = data.qr?.base64;
-                    if (base64 && base64 !== 'mock' && !base64.includes('mock') && base64.startsWith('data:')) {
+                    // Check if we got a real QR code (starts with data: URI)
+                    if (base64 && typeof base64 === 'string' && base64.startsWith('data:')) {
                         setQrCode(base64);
+                        clearInterval(pollInterval);
                         return;
                     }
                 }
             } catch (error) {
-                console.error('QR fetch attempt', attempt + 1, error);
+                console.error('QR fetch attempt', attempts, error);
             }
-        }
-        // After all retries, show whatever we got
-        setQrCode('mock');
+            
+            if (attempts >= maxAttempts) {
+                clearInterval(pollInterval);
+                setQrCode('mock');
+            }
+        }, 3000);
     };
 
     return (

@@ -65,17 +65,12 @@ async def get_tenant_qr(tenant_id: UUID, db: Session = Depends(get_db)):
     if not tenant.instance_name:
         return {"instance_name": None, "qr": {"base64": None}, "status": "no_instance"}
     
-    # Poll the connect endpoint up to 10 times (20 seconds max)
-    for attempt in range(10):
-        qr_data = await fetch_qr_code(tenant.instance_name)
-        # Evolution API returns base64 when QR is ready
-        if isinstance(qr_data, dict) and qr_data.get("base64"):
-            return {"instance_name": tenant.instance_name, "qr": qr_data, "status": "qr_ready"}
-        # If count > 0, QR generation is in progress
-        if isinstance(qr_data, dict) and qr_data.get("count", 0) == 0:
-            await asyncio.sleep(2)
-        else:
-            break
+    # Single call - frontend handles retry polling
+    qr_data = await fetch_qr_code(tenant.instance_name)
+    
+    # Check if we got a real QR code
+    if isinstance(qr_data, dict) and qr_data.get("base64"):
+        return {"instance_name": tenant.instance_name, "qr": qr_data, "status": "qr_ready"}
     
     return {"instance_name": tenant.instance_name, "qr": qr_data, "status": "pending"}
 
